@@ -7,7 +7,10 @@ export type LeaveRequest = {
   status: LeaveStatus;
 };
 
-export type HistoryEntry = {
+export type StatusChange = {
   id: string;
   previousStatus: LeaveStatus;
 };
+
+// One undoable action: a single approve/reject is a batch of one, "Approve all" a batch of many.
+export type HistoryEntry = StatusChange[];

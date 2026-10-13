@@ -16,7 +16,7 @@ Use only React Native core components. Add no packages.
 - [ ] The title shows at the top.
 - [ ] Under it, one line of counts in this format: `Pending: 3 · Approved: 1 · Rejected: 0`
 - [ ] On first load the counts read Pending 3, Approved 1, Rejected 0.
-- [ ] The counts update on every Approve, Reject and Undo.
+- [ ] The counts update on every Approve, Reject, Approve all and Undo.
 
 ## 2. Request cards
 
@@ -25,6 +25,18 @@ Use only React Native core components. Add no packages.
 - [ ] Pending status text is grey.
 - [ ] Approved status text is green.
 - [ ] Rejected status text is red.
+
+## Approve all
+
+- [ ] An Approve all button shows below the title.
+- [ ] Tapping it opens an alert asking first: `Approve 2 pending requests?`
+- [ ] The number in the alert is the real count of pending requests, for example `Approve 3 pending requests?` on first load.
+- [ ] The alert has two buttons: Cancel and Approve.
+- [ ] Cancel changes nothing: the statuses and counts stay the same, and nothing is added to the undo history.
+- [ ] Confirming sets every pending request to approved, hides their buttons and updates the counts.
+- [ ] Requests that were already approved or rejected are not changed.
+- [ ] The button is disabled when there are no pending requests.
+- [ ] The button has an accessibilityLabel, for example `Approve all pending requests`.
 
 ## 3. Approve and Reject buttons
 
@@ -48,6 +60,11 @@ Use only React Native core components. Add no packages.
 - [ ] Undo restores the previous status, the card's buttons and the counts.
 - [ ] Undo is disabled when there is nothing to undo, including on first load and after everything is undone.
 - [ ] A cancelled Reject does not count as an action.
+- [ ] After Approve all, one tap on Undo reverts the whole Approve all action, not just one request.
+- [ ] That one tap restores every request Approve all changed to its previous status (pending), brings back their buttons and updates the counts.
+- [ ] Approve all counts as one action in the history, so a second tap on Undo reverts the action before it.
+- [ ] Undo does not touch requests that were already approved or rejected before Approve all.
+- [ ] After Undo of Approve all, the Approve all button is enabled again if any request is pending.
 
 ## 6. Accessibility
 
@@ -59,3 +76,5 @@ Use only React Native core components. Add no packages.
 - [ ] `npx tsc --noEmit` passes.
 - [ ] Nothing was added to `package.json` dependencies.
 - [ ] Walk through: approve Ali, reject Sara (confirm), cancel a reject on Omar, then undo twice. Check the counts after each step.
+- [ ] Walk through Approve all: reject Ali (confirm), tap Approve all and check the alert says `Approve 2 pending requests?`. Confirm it, then tap Undo once. Both Sara and Omar should be pending again and Ali should still be rejected. Tap Undo again to restore Ali.
+- [ ] Approve all is disabled once no request is pending.
