@@ -1,0 +1,19 @@
+{
+  "enabledPlugins": {
+    "expo@claude-plugins-official": true
+  },
+  "permissions": {
+    "deny": [
+      "Bash(npm install:*)",
+      "Bash(npm i:*)",
+      "Bash(npm add:*)",
+      "Bash(npx expo install:*)",
+      "Bash(bunx expo install:*)",
+      "Bash(bun add:*)",
+      "Bash(bun install:*)",
+      "Bash(yarn add:*)",
+      "Bash(pnpm add:*)",
+      "Bash(pnpm install:*)"
+    ]
+  }
+}
