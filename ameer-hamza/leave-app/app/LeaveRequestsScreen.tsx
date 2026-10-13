@@ -13,12 +13,16 @@ export type LeaveRequest = {
   status: LeaveStatus;
 };
 
-type HistoryEntry = { id: string; previousStatus: LeaveStatus };
+type Change = { id: string; previousStatus: LeaveStatus };
+
+// One entry per user action, so a single Undo reverts every request that action changed.
+type HistoryEntry = { changes: Change[] };
 
 type State = { requests: LeaveRequest[]; history: HistoryEntry[] };
 
 type Action =
   | { type: 'decide'; id: string; status: 'approved' | 'rejected' }
+  | { type: 'approveAll' }
   | { type: 'undo' };
 
 // In-memory only: every app start begins from this data with an empty undo history.
@@ -41,16 +45,34 @@ function reducer(state: State, action: Action): State {
         requests: state.requests.map((r) =>
           r.id === action.id ? { ...r, status: action.status } : r,
         ),
-        history: [...state.history, { id: action.id, previousStatus: target.status }],
+        history: [
+          ...state.history,
+          { changes: [{ id: action.id, previousStatus: target.status }] },
+        ],
+      };
+    }
+    case 'approveAll': {
+      const pending = state.requests.filter((r) => r.status === 'pending');
+      if (pending.length === 0) return state;
+      return {
+        requests: state.requests.map((r) =>
+          r.status === 'pending' ? { ...r, status: 'approved' } : r,
+        ),
+        history: [
+          ...state.history,
+          { changes: pending.map((r) => ({ id: r.id, previousStatus: r.status })) },
+        ],
       };
     }
     case 'undo': {
       const last = state.history[state.history.length - 1];
       if (!last) return state;
+      const previous = new Map(last.changes.map((c) => [c.id, c.previousStatus]));
       return {
-        requests: state.requests.map((r) =>
-          r.id === last.id ? { ...r, status: last.previousStatus } : r,
-        ),
+        requests: state.requests.map((r) => {
+          const status = previous.get(r.id);
+          return status ? { ...r, status } : r;
+        }),
         history: state.history.slice(0, -1),
       };
     }
@@ -60,6 +82,7 @@ function reducer(state: State, action: Action): State {
 export default function LeaveRequestsScreen() {
   const [state, dispatch] = useReducer(reducer, INITIAL_STATE);
   const canUndo = state.history.length > 0;
+  const pendingCount = state.requests.filter((r) => r.status === 'pending').length;
 
   const handleApprove = (request: LeaveRequest) => {
     dispatch({ type: 'decide', id: request.id, status: 'approved' });
@@ -76,11 +99,30 @@ export default function LeaveRequestsScreen() {
     ]);
   };
 
+  const handleApproveAll = () => {
+    const noun = pendingCount === 1 ? 'request' : 'requests';
+    Alert.alert(`Approve ${pendingCount} pending ${noun}?`, undefined, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Approve', onPress: () => dispatch({ type: 'approveAll' }) },
+    ]);
+  };
+
   return (
     <View style={styles.screen}>
       <Text style={styles.title} accessibilityRole="header">
         Leave Requests
       </Text>
+
+      <View style={styles.toolbar}>
+        <ActionButton
+          label="Approve all"
+          variant="approve"
+          disabled={pendingCount === 0}
+          onPress={handleApproveAll}
+          accessibilityLabel={`Approve all ${pendingCount} pending requests`}
+          accessibilityHint="Asks for confirmation, then approves every pending request"
+        />
+      </View>
 
       <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
         <LeaveTable
@@ -97,7 +139,7 @@ export default function LeaveRequestsScreen() {
           disabled={!canUndo}
           onPress={() => dispatch({ type: 'undo' })}
           accessibilityLabel="Undo last action"
-          accessibilityHint="Reverts the most recent approve or reject"
+          accessibilityHint="Reverts the most recent action, including Approve all"
         />
       </View>
     </View>
@@ -118,7 +160,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#111827',
     paddingHorizontal: 16,
+    marginBottom: 8,
+  },
+  toolbar: {
+    paddingHorizontal: 16,
     marginBottom: 12,
+    alignItems: 'flex-start',
   },
   content: {
     flex: 1,

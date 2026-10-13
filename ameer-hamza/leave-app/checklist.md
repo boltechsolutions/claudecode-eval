@@ -22,3 +22,21 @@
 - [x] Alert uses correct name/dates for Omar and Hina
 - [x] Approve Omar, Reject Hina, Undo ×2 → Hina reverted first, then Omar; Undo disabled again
 - [x] Reload app → fresh seed data
+
+## Approve all — Build
+- [x] History entries are grouped (`{ changes: [...] }`): one entry per user action
+- [x] Reducer `approveAll` approves every pending request as ONE history entry; no-op when none pending
+- [x] Undo reverts every change in the last entry (Approve all undone in one tap)
+- [x] "Approve all" button (green) below the title, disabled when 0 pending
+- [x] Alert "Approve N pending requests?" with real count (singular "request" when N = 1), Cancel + Approve
+- [x] accessibilityLabel/Hint on Approve all; Undo hint updated
+- [x] No new packages
+
+## Approve all — Verify
+- [x] npx tsc --noEmit passes
+- [x] Android JS bundle builds (npx expo export --platform android)
+- [x] Reducer test: Approve Ali → Approve all → Undo → Omar + Hina pending together, Ali still approved
+- [x] Reducer test: second Undo → back to seed data, history empty
+- [x] Reducer test: Reject Hina → Approve all → Undo → Ali + Omar pending, Hina still rejected
+- [x] Reducer test: Approve all with 0 pending → state unchanged, no history entry
+- [x] On device: alert text shows real count; Cancel changes nothing; button disabled after all approved
