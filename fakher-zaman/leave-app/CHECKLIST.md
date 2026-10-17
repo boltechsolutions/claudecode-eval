@@ -32,3 +32,13 @@
 - **Notes**:
   - Before this run, the app's live state had drifted from the fresh seed data with no taps issued by this test (likely a leftover session or concurrent interaction on the shared device) — force-stopped and relaunched the app to get a clean baseline before testing.
   - One `adb input tap` on Undo was dropped (no state change) and had to be repeated; this was an ADB input timing artifact, not an app defect — the retried tap produced the correct, expected transition.
+
+## Part 2
+
+- [ ] From the starting state, I tap "Approve all". I should see a confirmation alert reading "Approve 3 pending requests?" (the real pending count).
+- [ ] I confirm the alert. I should see "Pending: 0 · Approved: 4 · Rejected: 0" and the "Approve all" button now disabled.
+- [ ] I tap Undo once. I should see all 3 just-approved requests revert to pending in a single tap, with counts back to "Pending: 3 · Approved: 1 · Rejected: 0".
+- [ ] I reject Ali Khan, then tap "Approve all". I should see the alert read "Approve 2 pending requests?" (the remaining pending count).
+- [ ] I tap Undo once. I should see only the 2 requests just approved by "Approve all" revert to pending; Ali Khan remains rejected.
+- [ ] I tap Undo again. I should see Ali Khan revert to pending.
+- [ ] I tap "Approve all", then tap Cancel on the alert. I should see no change to any request's status or the counts, and the Undo history unaffected.
