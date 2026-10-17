@@ -65,6 +65,31 @@ export function LeaveRequestsScreen() {
     );
   }
 
+  function handleApproveAll() {
+    const pendingRequests = requests.filter((r) => r.status === 'pending');
+    if (pendingRequests.length === 0) return;
+
+    const count = pendingRequests.length;
+    const message = `Approve ${count} pending request${count === 1 ? '' : 's'}?`;
+
+    Alert.alert('Approve all pending requests?', message, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Approve all',
+        onPress: () => {
+          const changes: StatusChange[] = pendingRequests.map((r) => ({
+            requestId: r.id,
+            previousStatus: r.status,
+          }));
+          setHistory((current) => [...current, { changes }]);
+          setRequests((current) =>
+            current.map((r) => (r.status === 'pending' ? { ...r, status: 'approved' } : r))
+          );
+        },
+      },
+    ]);
+  }
+
   function handleUndo() {
     if (history.length === 0) return;
 
@@ -79,6 +104,7 @@ export function LeaveRequestsScreen() {
   }
 
   const undoDisabled = history.length === 0;
+  const approveAllDisabled = counts.pending === 0;
 
   return (
     <View
@@ -91,6 +117,17 @@ export function LeaveRequestsScreen() {
       <Text style={styles.summary}>
         Pending: {counts.pending} · Approved: {counts.approved} · Rejected: {counts.rejected}
       </Text>
+
+      <Pressable
+        style={[styles.approveAllButton, approveAllDisabled && styles.approveAllButtonDisabled]}
+        onPress={handleApproveAll}
+        disabled={approveAllDisabled}
+        accessibilityRole="button"
+        accessibilityLabel="Approve all pending requests"
+        accessibilityState={{ disabled: approveAllDisabled }}
+      >
+        <Text style={styles.approveAllButtonText}>Approve all</Text>
+      </Pressable>
 
       <FlatList
         style={styles.list}
@@ -129,10 +166,24 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#374151',
     marginTop: 4,
-    marginBottom: 16,
+    marginBottom: 8,
   },
   list: {
     flex: 1,
+  },
+  approveAllButton: {
+    backgroundColor: '#16a34a',
+    borderRadius: 6,
+    paddingVertical: 12,
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  approveAllButtonDisabled: {
+    backgroundColor: '#d1d5db',
+  },
+  approveAllButtonText: {
+    color: '#fff',
+    fontWeight: '600',
   },
   undoButton: {
     backgroundColor: '#374151',

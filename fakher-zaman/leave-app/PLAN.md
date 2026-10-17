@@ -173,3 +173,179 @@ produces a new, independent entry).
 - **Color choice**: grey/green/red hex values are an assumption since the
   brief doesn't give exact colors; easy to adjust later if the user has a
   palette in mind.
+
+---
+
+# Plan: Leave Requests Screen — Part 2 ("Approve all" + bulk Undo)
+
+`CHECKLIST.md`'s "Part 2" group describes the expected behavior of a new
+"Approve all" button with grouped undo. This section designs that feature.
+The `UndoEntry = { changes: StatusChange[] }` shape above was deliberately
+built so a future bulk action could push one entry covering many requests
+and have a single Undo tap revert all of them — this plan confirms that
+design holds unmodified.
+
+## Files touched
+
+Only `src/screens/LeaveRequestsScreen.tsx` changes. `src/types/leave.ts`,
+`src/components/LeaveRequestCard.tsx`, `src/data/seedLeaveRequests.ts`, and
+`App.tsx` are untouched. Checking off `CHECKLIST.md`'s Part 2 boxes is a
+separate, later step done after manual verification on a real running app.
+
+## Why the undo data model doesn't need to change
+
+`handleUndo` already pops the **last entry** and, in one `setRequests` pass,
+applies every change inside that entry to whichever requests match:
+
+```ts
+function handleUndo() {
+  if (history.length === 0) return;
+  const lastEntry = history[history.length - 1];
+  setRequests((current) =>
+    current.map((request) => {
+      const change = lastEntry.changes.find((c) => c.requestId === request.id);
+      return change ? { ...request, status: change.previousStatus } : request;
+    })
+  );
+  setHistory((current) => current.slice(0, -1));
+}
+```
+
+This is already generic over `changes.length` — whether an entry has 1
+change or N, it works unmodified. So "Approve all" only needs to push one
+entry whose `changes` array has one `StatusChange` per request that was
+pending at the time; bulk undo falls out for free. This is also what makes
+`CHECKLIST.md`'s "reject Ali Khan, then Approve all, then Undo twice"
+scenario correct: the reject and the bulk-approve are two separate,
+independent entries, so popping history once only reverts the newest
+(bulk) entry, leaving Ali Khan rejected until a second Undo pops his entry.
+
+## New `handleApproveAll` function
+
+```tsx
+function handleApproveAll() {
+  const pendingRequests = requests.filter((r) => r.status === 'pending');
+  if (pendingRequests.length === 0) return; // defensive; button is disabled in this state
+
+  const count = pendingRequests.length;
+  const message = `Approve ${count} pending request${count === 1 ? '' : 's'}?`;
+
+  Alert.alert(
+    'Approve all pending requests?',
+    message,
+    [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Approve all',
+        onPress: () => {
+          const changes: StatusChange[] = pendingRequests.map((r) => ({
+            requestId: r.id,
+            previousStatus: r.status,
+          }));
+          setHistory((current) => [...current, { changes }]);
+          setRequests((current) =>
+            current.map((r) => (r.status === 'pending' ? { ...r, status: 'approved' } : r))
+          );
+        },
+      },
+    ]
+  );
+}
+```
+
+The checklist pins the exact **message** text (`"Approve 3 pending
+requests?"` / `"Approve 2 pending requests?"`) but not the alert title;
+`"Approve all pending requests?"` follows Part 1's pattern of a short title
+plus a dynamic-detail message. Singular wording (`"Approve 1 pending
+request?"`) isn't exercised by the checklist but costs one ternary to get
+right. `pendingRequests` is captured once when the button is tapped and
+reused inside `onPress`, matching `handleReject`'s existing pattern of
+capturing `request` before showing the alert.
+
+## New "Approve all" button
+
+Placed between the summary line and the `FlatList` (title → summary →
+Approve all → list → Undo), so the bulk action sits just above the content
+it acts on:
+
+```tsx
+const approveAllDisabled = counts.pending === 0; // derived, no new state
+
+<Pressable
+  style={[styles.approveAllButton, approveAllDisabled && styles.approveAllButtonDisabled]}
+  onPress={handleApproveAll}
+  disabled={approveAllDisabled}
+  accessibilityRole="button"
+  accessibilityLabel="Approve all pending requests"
+  accessibilityState={{ disabled: approveAllDisabled }}
+>
+  <Text style={styles.approveAllButtonText}>Approve all</Text>
+</Pressable>
+```
+
+New styles reuse existing colors (green `#16a34a` from the card's Approve
+button, disabled grey `#d1d5db` from `undoButtonDisabled`):
+
+```ts
+approveAllButton: {
+  backgroundColor: '#16a34a',
+  borderRadius: 6,
+  paddingVertical: 12,
+  alignItems: 'center',
+  marginBottom: 16,
+},
+approveAllButtonDisabled: { backgroundColor: '#d1d5db' },
+approveAllButtonText: { color: '#fff', fontWeight: '600' },
+```
+
+## Edge cases
+
+- **Zero pending**: button disabled via `approveAllDisabled`; handler also
+  no-ops defensively, same pattern as `handleUndo` on empty history.
+- **Exactly one pending**: singular message wording, untested by the
+  checklist but cheap to get right.
+- **Cancel path**: the Cancel button has no `onPress` (same as Reject's
+  Cancel), so no `setHistory`/`setRequests` call fires at all.
+- **Reject-then-approve-all (Ali Khan scenario)**: `pendingRequests` is
+  recomputed from live `requests` each call, correctly excluding anyone
+  already rejected; two independent history entries result, undoing in the
+  right order.
+- **Rapid double-tap**: once confirmed, `counts.pending` recomputes to 0 in
+  the same render pass that disables the button, so it can't be re-tapped
+  mid-flight — same reasoning Part 1 relied on for per-card buttons
+  disappearing after one tap.
+- **Mixing individual and bulk actions**: `handleApprove`/`handleReject` are
+  untouched, so each user action still pushes its own independent,
+  correctly-ordered entry.
+
+## How to test
+
+- **Typecheck**: `npx tsc --noEmit`.
+- **Manual**, mapped 1:1 to `CHECKLIST.md`'s Part 2 items:
+  1. Fresh load (`Pending: 3 · Approved: 1 · Rejected: 0`) → tap "Approve
+     all" → alert message reads exactly "Approve 3 pending requests?".
+  2. Confirm → summary reads "Pending: 0 · Approved: 4 · Rejected: 0" and
+     "Approve all" is now disabled.
+  3. Undo once → all 3 revert to pending with buttons back, summary back to
+     "Pending: 3 · Approved: 1 · Rejected: 0".
+  4. Reject Ali Khan, tap "Approve all" → alert reads "Approve 2 pending
+     requests?".
+  5. Confirm, then Undo once → only Sara Ahmed and Omar Raza revert; Ali
+     Khan stays "Rejected".
+  6. Undo again → Ali Khan reverts to pending.
+  7. Tap "Approve all", then Cancel → nothing changes; a subsequent Undo
+     still targets whatever the last real action was.
+  - Re-spot-check a couple of Part 1's single approve/reject + single-undo
+    flows for regressions, since they share state with the new handler.
+
+## Risks
+
+- **`Alert.alert` on web**: same caveat as Part 1 — react-native-web's
+  multi-button alert support is historically inconsistent; verify on
+  iOS/Android, treat `--web` as best-effort.
+- **Layout**: a second full-width button above the list slightly shrinks
+  the list's visible area; low risk with 4 seed rows, worth a quick visual
+  check on a small screen.
+- **No risk to existing undo logic**: `handleUndo` is unmodified; both
+  single and bulk actions push to the same `history` stack with the same
+  `UndoEntry` shape.

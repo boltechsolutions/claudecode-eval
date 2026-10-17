@@ -35,10 +35,19 @@
 
 ## Part 2
 
-- [ ] From the starting state, I tap "Approve all". I should see a confirmation alert reading "Approve 3 pending requests?" (the real pending count).
-- [ ] I confirm the alert. I should see "Pending: 0 · Approved: 4 · Rejected: 0" and the "Approve all" button now disabled.
-- [ ] I tap Undo once. I should see all 3 just-approved requests revert to pending in a single tap, with counts back to "Pending: 3 · Approved: 1 · Rejected: 0".
-- [ ] I reject Ali Khan, then tap "Approve all". I should see the alert read "Approve 2 pending requests?" (the remaining pending count).
-- [ ] I tap Undo once. I should see only the 2 requests just approved by "Approve all" revert to pending; Ali Khan remains rejected.
-- [ ] I tap Undo again. I should see Ali Khan revert to pending.
-- [ ] I tap "Approve all", then tap Cancel on the alert. I should see no change to any request's status or the counts, and the Undo history unaffected.
+- [x] From the starting state, I tap "Approve all". I should see a confirmation alert reading "Approve 3 pending requests?" (the real pending count). — **PASS** (alert title "Approve all pending requests?", message "Approve 3 pending requests?", confirmed via UI dump and screenshot)
+- [x] I confirm the alert. I should see "Pending: 0 · Approved: 4 · Rejected: 0" and the "Approve all" button now disabled. — **PASS** (confirmed `enabled="false"` on the button's `content-desc="Approve all pending requests"` node via `uiautomator dump`)
+- [x] I tap Undo once. I should see all 3 just-approved requests revert to pending in a single tap, with counts back to "Pending: 3 · Approved: 1 · Rejected: 0". — **PASS**
+- [x] I reject Ali Khan, then tap "Approve all". I should see the alert read "Approve 2 pending requests?" (the remaining pending count). — **PASS**
+- [x] I tap Undo once. I should see only the 2 requests just approved by "Approve all" revert to pending; Ali Khan remains rejected. — **PASS**
+- [x] I tap Undo again. I should see Ali Khan revert to pending. — **PASS** (returns to the exact starting state: Pending: 3 · Approved: 1 · Rejected: 0, Undo disabled)
+- [x] I tap "Approve all", then tap Cancel on the alert. I should see no change to any request's status or the counts, and the Undo history unaffected. — **PASS** (counts unchanged, Undo button still `enabled="false"` confirming no entry was pushed)
+
+## Smoke test run — Part 2
+
+- **Device**: Samsung SM-A065F, physical device, 720×1600 @ density 300, connected over Wi-Fi ADB (`192.168.100.131:33383`), same device as the Part 1 run.
+- **Build**: existing debug build (`npx expo run:android`) already installed; app force-stopped and relaunched to pick up the new JS bundle from Metro and get a clean seed-data baseline before testing.
+- **Method**: same as Part 1 — `adb shell input tap` driven from `uiautomator dump` element bounds (verifies real rendered text, `content-desc`/accessibilityLabel, and enabled/disabled state), cross-checked against `adb exec-out screencap` screenshots.
+- **Result**: all 7 checks above pass, including the exact dynamic alert copy ("Approve 3 pending requests?" / "Approve 2 pending requests?"), the grouped single-tap Undo for the bulk action, and the Ali-Khan-stays-isolated ordering across two independent history entries. Also re-spot-checked a Part 1 flow (single Approve + single Undo) after this change with no regression.
+- **Notes**:
+  - One `adb input tap` on Ali Khan's Reject button was dropped (no dialog appeared) and had to be repeated — same class of ADB input timing artifact noted in the Part 1 run, not an app defect; the retried tap produced the correct "Reject leave?" dialog.
