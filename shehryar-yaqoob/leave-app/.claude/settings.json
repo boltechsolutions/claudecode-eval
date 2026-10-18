@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Allow npx tsc --noEmit"
+    ],
+    "deny": [
+      "don't read .env file",
+      "don't force pushed to github"
+    ]
+  },
+  "enabledPlugins": {
+    "expo@claude-plugins-official": true
+  }
+}
