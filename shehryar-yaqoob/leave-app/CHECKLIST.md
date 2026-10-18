@@ -72,3 +72,94 @@ Derived from `PLAN.md`. Check these once Part 1 is implemented.
 - [x] Web (`expo start --web`): confirm the known gap — `Alert.alert` does not fire, so
       Reject silently does nothing (no popup, no state change). Approve and Undo still
       work normally on web.
+
+# Leave Requests Screen — Part 2 Test Checklist
+
+Derived from `PLAN.md` Part 2. Check these once Part 2 is implemented.
+
+## Build / types
+
+- [x] `npx tsc --noEmit` passes clean (strict mode, no `any`), including the `UndoAction`
+      shape change (`{ requestId, previousStatus }` → `{ entries: UndoEntry[] }`).
+- [x] No new npm packages were added — only React Native core components used. (The only
+      `package.json` diff is `expo run:android` rewriting the `android`/`ios` scripts to
+      `expo run:android`/`expo run:ios`; no dependency was added or changed.)
+
+## Approve all — placement and initial state
+
+- [x] "Approve all" button renders directly below the "Leave Requests" title and above
+      the `Pending: … · Approved: … · Rejected: …` summary line.
+- [x] On first load (3 pending), "Approve all" is enabled (not greyed out).
+
+## Approve all — happy path
+
+- [x] Tapping "Approve all" turns all currently-pending cards (Ali Khan, Sara Ahmed,
+      Omar Raza) green and relabels each "approved" in one tap.
+- [x] Approve/Reject buttons disappear from all three cards immediately after.
+- [x] Header updates to `Pending: 0 · Approved: 4 · Rejected: 0` in one update.
+- [x] Hina Malik's seeded "approved" card is visually unchanged and untouched.
+- [x] "Approve all" button becomes disabled immediately after, since no pending rows
+      remain.
+- [x] Undo button becomes/remains enabled after "Approve all".
+
+## Approve all — single-tap undo
+
+- [x] After "Approve all" with 3 pending rows, tapping Undo once reverts all three rows
+      back to pending (status text grey, Approve/Reject buttons reappear) — not one row
+      per Undo tap.
+- [x] Header reverts to `Pending: 3 · Approved: 1 · Rejected: 0` after that single Undo
+      tap.
+- [x] After that single Undo, the Undo button's enabled/disabled state matches whatever
+      history remains (disabled if history is now empty).
+
+## Approve all — partial pending set
+
+- [x] Reject one pending row first (e.g. Omar Raza, confirm the alert), leaving 2
+      pending. Then tap "Approve all": only the remaining pending rows (Ali Khan, Sara
+      Ahmed) turn approved; the already-rejected row is untouched.
+- [x] Tapping Undo once after that reverts only the two rows "Approve all" changed; the
+      earlier reject remains in place (not reverted by that same Undo tap).
+- [x] A second Undo tap then reverts the earlier reject back to pending.
+
+## Approve all — single pending row
+
+- [x] With exactly one pending row remaining (approve/reject the others individually
+      first), tapping "Approve all" approves that one row and behaves identically to
+      tapping its own Approve button: one Undo tap reverts just that row.
+
+## Approve all — zero pending
+
+- [x] Once there are zero pending rows (via any combination of Approve/Reject/Approve
+      all), "Approve all" is disabled and does nothing if pressed — no change to
+      requests, no new Undo history entry.
+
+## Undo stack ordering across mixed actions
+
+- [x] Perform a mix of single actions and one "Approve all" (e.g. Approve one row →
+      Approve all the remaining pending rows → Reject another row), then Undo
+      repeatedly. Confirm each Undo reverts exactly one prior action, newest first, and
+      that the "Approve all" step is reverted as a whole in a single Undo tap, not
+      spread across multiple taps.
+
+## Accessibility
+
+- [x] "Approve all" button exposes `accessibilityRole="button"` and
+      `accessibilityLabel="Approve all"`.
+- [x] "Approve all" button's `accessibilityState.disabled` matches its actual disabled
+      state at every step above.
+
+## Rapid double-tap
+
+- [x] Rapid double-tap on "Approve all" while 2+ rows are pending does not visibly
+      double-approve or corrupt request state (all pending rows still end up approved
+      exactly once, no crash). A duplicate undo-history batch from a genuine same-tick
+      double-tap is a known, accepted limitation (see `PLAN.md` Part 2 Risks) — not a
+      blocking failure.
+
+## Platform-specific
+
+- [x] iOS: "Approve all" and the single-tap undo-of-batch behavior work as described.
+- [x] Android: same.
+- [x] Web (`expo start --web`): "Approve all" and its Undo work normally on web (this
+      feature does not use `Alert.alert`, so it is unaffected by the known web Alert
+      gap).

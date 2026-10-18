@@ -126,3 +126,176 @@ introduced later if/when multiple screens actually exist.
      confirm each carries `accessibilityLabel` like `"Approve leave for Ali Khan"`.
 3. Optionally run `--web` too, to directly observe/confirm the known Alert.alert gap
    described above (Approve still works there; Reject's confirm step does not).
+
+# Leave Requests Screen — Part 2
+
+## Context
+
+Part 1 is complete: individual Approve/Reject/Undo, with `history: UndoAction[]` as a
+flat LIFO stack of single-row undo entries (`{requestId, previousStatus}`). Part 2 adds
+an "Approve all" button, below the title, that approves every currently-pending request
+in one tap — and the existing Undo button must revert that *entire* action in a single
+tap, not one tap per row. This requires history entries to represent a batch of rows,
+not just one, so `handleUndo` needs exactly one implementation regardless of batch size.
+
+## Files
+
+- `src/types/leave.ts` — edit. Replace `UndoAction = { requestId: string; previousStatus:
+  LeaveStatus }` with a batch shape:
+  `UndoEntry = { requestId: string; previousStatus: LeaveStatus }` and
+  `UndoAction = { entries: UndoEntry[] }`.
+- `src/screens/LeaveRequestsScreen.tsx` — edit. `handleApprove`/`doReject` push a 1-entry
+  batch instead of a flat object; new `handleApproveAll` approves every pending row and
+  pushes one N-entry batch; `handleUndo` reverts every entry in the last batch in one
+  call; new `approveAllDisabled = pending === 0`; new "Approve all" `Pressable` rendered
+  between the title and `LeaveSummary`.
+- `CHECKLIST.md` — edit. Append a "Part 2 Test Checklist" section (see below).
+
+No changes to `LeaveSummary.tsx`, `LeaveRequestCard.tsx`, or `App.tsx`.
+
+## Steps
+
+1. In `src/types/leave.ts`, swap `UndoAction` for the batch shape above.
+2. In `LeaveRequestsScreen.tsx`, update `handleApprove` and `doReject` to push
+   `{ entries: [{ requestId: id, previousStatus: 'pending' }] }` instead of the old flat
+   object — no other change to their logic.
+3. Add `handleApproveAll`:
+   ```ts
+   function handleApproveAll() {
+     const pendingIds = requests
+       .filter((request) => request.status === 'pending')
+       .map((request) => request.id);
+
+     if (pendingIds.length === 0) {
+       return;
+     }
+
+     setRequests((current) =>
+       current.map((request) =>
+         request.status === 'pending' ? { ...request, status: 'approved' } : request
+       )
+     );
+
+     setHistory((current) => [
+       ...current,
+       { entries: pendingIds.map((id) => ({ requestId: id, previousStatus: 'pending' as const })) },
+     ]);
+   }
+   ```
+   `pendingIds` is captured from `requests` already in scope at render time — the same
+   closure convention `handleApprove`/`handleRejectPress` already use. The `setRequests`
+   guard (`status === 'pending'`) makes the status change idempotent no matter how many
+   times it fires. The early return means no empty-entries batch is ever pushed, and the
+   seeded pre-approved row (Hina Malik, never `pending`) can never be touched or recorded.
+4. Replace `handleUndo`'s body with a batch-aware version:
+   ```ts
+   function handleUndo() {
+     if (history.length === 0) {
+       return;
+     }
+
+     const lastAction = history[history.length - 1];
+     const revertMap = new Map(lastAction.entries.map((entry) => [entry.requestId, entry.previousStatus]));
+
+     setRequests((current) =>
+       current.map((request) =>
+         revertMap.has(request.id) ? { ...request, status: revertMap.get(request.id) as LeaveStatus } : request
+       )
+     );
+     setHistory((current) => current.slice(0, -1));
+   }
+   ```
+   One implementation reverts a 1-entry batch (ordinary Approve/Reject) or an N-entry
+   batch (Approve all) identically — no branching on batch size. `undoDisabled` stays
+   `history.length === 0`, unchanged.
+5. Add `const approveAllDisabled = pending === 0;` alongside the existing
+   `pending`/`approved`/`rejected` derivations.
+6. Render the new button between the title and `LeaveSummary`:
+   ```tsx
+   <Text style={styles.title}>Leave Requests</Text>
+   <Pressable
+     style={[styles.approveAllButton, approveAllDisabled && styles.approveAllButtonDisabled]}
+     accessibilityRole="button"
+     accessibilityLabel="Approve all"
+     accessibilityState={{ disabled: approveAllDisabled }}
+     disabled={approveAllDisabled}
+     onPress={handleApproveAll}>
+     <Text style={styles.approveAllButtonText}>Approve all</Text>
+   </Pressable>
+   <LeaveSummary pending={pending} approved={approved} rejected={rejected} />
+   ```
+   New styles, reusing the same green already used for "approved"/approve actions
+   (`#1a7f37`) and the same disabled grey the Undo button already uses (`#cccccc`):
+   ```ts
+   approveAllButton: {
+     backgroundColor: '#1a7f37',
+     borderRadius: 6,
+     paddingVertical: 12,
+     alignItems: 'center',
+     marginBottom: 10,
+   },
+   approveAllButtonDisabled: { backgroundColor: '#cccccc' },
+   approveAllButtonText: { color: '#ffffff', fontWeight: '600' },
+   ```
+7. `npx tsc --noEmit` — fix any type errors (the `UndoAction` shape change touches every
+   call site in `handleApprove`/`doReject`/`handleUndo`).
+
+### How the undo history changes
+
+Before: `history` is a flat array of `{requestId, previousStatus}`, one entry per row
+action; `handleUndo` reverts exactly one row per tap. After: `history` is an array of
+`{entries: [...]}` batches — ordinary Approve/Reject still push one batch each, just now
+wrapping a single-element array; Approve All pushes one batch whose `entries` lists every
+row it changed. `handleUndo` always pops the *last batch* and reverts every entry in it
+in one call, so a 3-row Approve All undoes in exactly one Undo tap, while interleaved
+single actions and batches still unwind newest-first (LIFO order is unaffected — only
+what one "unit" reverts has changed).
+
+## Edge cases
+
+- Zero pending at press time: "Approve all" is disabled via `approveAllDisabled`;
+  `handleApproveAll`'s internal early-return is defense-in-depth if ever invoked anyway.
+- Exactly one pending row: produces a 1-entry batch, structurally identical to what
+  `handleApprove` would push for that row — undoes identically in one tap.
+- Mixed interleaving (single → batch → single → Undo×3): reverts newest-first regardless
+  of batch size, no special-casing required.
+- Seeded pre-approved row (Hina Malik): never `pending`, so never in `pendingIds`, never
+  flipped, never recorded in any `UndoAction.entries` — untouched by Approve All or Undo.
+- Rapid double-tap on "Approve all": left as-is, matching the existing inherited
+  Approve/Reject limitation (the `setRequests` guard keeps actual request state correct
+  either way; only a duplicate history batch could theoretically be pushed on a genuine
+  same-tick double-fire) — documented, not fixed, consistent with Part 1's own un-fixed
+  double-tap-to-history edge case.
+
+## Risks
+
+- **Batch-sized double-tap race** (accepted, not fixed): a genuine same-tick double-tap
+  on "Approve all" could push two identical-looking history batches; request state itself
+  stays correct regardless. Documented in the Part 2 checklist as a known limitation.
+- **Type shape ripple**: `UndoAction`'s new shape has exactly one consumer file
+  (`LeaveRequestsScreen.tsx`) — no test files or other references exist elsewhere in the
+  repo, so the change is contained.
+- **No automated regression protection**: no test framework is installed (per the
+  no-new-package rule), so verification is the manual checklist walkthrough only — re-run
+  Part 1's checklist alongside Part 2's, since the `UndoAction` shape change touches
+  `handleApprove`/`doReject` as well as the new code.
+
+## How to test
+
+1. `npx tsc --noEmit` — must pass clean.
+2. `npx expo start --android` / `--ios` / `--web` (Approve All has no `Alert` dependency,
+   so it's unaffected by the known web Alert gap):
+   - 3 pending at load → "Approve all" enabled. Tap it → all 3 turn green "approved" in
+     one tap, header becomes `Pending: 0 · Approved: 4 · Rejected: 0`, Hina Malik
+     unchanged, "Approve all" becomes disabled, Undo becomes enabled.
+   - Tap Undo once → all 3 revert to pending together (not one at a time), header back to
+     `Pending: 3 · Approved: 1 · Rejected: 0`.
+   - Reject one row first (confirm the alert), then "Approve all" the remaining two, then
+     Undo twice → first Undo reverts only the two-row batch, second Undo reverts the
+     earlier reject — confirms newest-first ordering across mixed batch sizes.
+   - With exactly one pending row left, "Approve all" behaves identically to tapping that
+     row's own Approve button.
+   - Rapid double-tap "Approve all" with 2+ pending rows: all pending rows end up approved
+     exactly once, no crash (per the accepted/documented limitation above).
+   - `accessibilityRole="button"`, `accessibilityLabel="Approve all"`, and
+     `accessibilityState.disabled` all track `approveAllDisabled` correctly at each step.

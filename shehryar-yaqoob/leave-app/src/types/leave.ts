@@ -7,7 +7,11 @@ export type LeaveRequest = {
   status: LeaveStatus;
 };
 
-export type UndoAction = {
+export type UndoEntry = {
   requestId: string;
   previousStatus: LeaveStatus;
+};
+
+export type UndoAction = {
+  entries: UndoEntry[];
 };

@@ -26,12 +26,39 @@ export function LeaveRequestsScreen() {
 
   function handleApprove(id: string) {
     setRequests((current) => setRequestStatus(current, id, 'pending', 'approved'));
-    setHistory((current) => [...current, { requestId: id, previousStatus: 'pending' }]);
+    setHistory((current) => [
+      ...current,
+      { entries: [{ requestId: id, previousStatus: 'pending' }] },
+    ]);
   }
 
   function doReject(id: string) {
     setRequests((current) => setRequestStatus(current, id, 'pending', 'rejected'));
-    setHistory((current) => [...current, { requestId: id, previousStatus: 'pending' }]);
+    setHistory((current) => [
+      ...current,
+      { entries: [{ requestId: id, previousStatus: 'pending' }] },
+    ]);
+  }
+
+  function handleApproveAll() {
+    const pendingIds = requests
+      .filter((request) => request.status === 'pending')
+      .map((request) => request.id);
+
+    if (pendingIds.length === 0) {
+      return;
+    }
+
+    setRequests((current) =>
+      current.map((request) =>
+        request.status === 'pending' ? { ...request, status: 'approved' } : request
+      )
+    );
+
+    setHistory((current) => [
+      ...current,
+      { entries: pendingIds.map((id) => ({ requestId: id, previousStatus: 'pending' as const })) },
+    ]);
   }
 
   function handleRejectPress(id: string) {
@@ -52,10 +79,13 @@ export function LeaveRequestsScreen() {
     }
 
     const lastAction = history[history.length - 1];
+    const revertMap = new Map(
+      lastAction.entries.map((entry) => [entry.requestId, entry.previousStatus])
+    );
     setRequests((current) =>
       current.map((request) =>
-        request.id === lastAction.requestId
-          ? { ...request, status: lastAction.previousStatus }
+        revertMap.has(request.id)
+          ? { ...request, status: revertMap.get(request.id) as LeaveStatus }
           : request
       )
     );
@@ -63,10 +93,20 @@ export function LeaveRequestsScreen() {
   }
 
   const undoDisabled = history.length === 0;
+  const approveAllDisabled = pending === 0;
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Leave Requests</Text>
+      <Pressable
+        style={[styles.approveAllButton, approveAllDisabled && styles.approveAllButtonDisabled]}
+        accessibilityRole="button"
+        accessibilityLabel="Approve all"
+        accessibilityState={{ disabled: approveAllDisabled }}
+        disabled={approveAllDisabled}
+        onPress={handleApproveAll}>
+        <Text style={styles.approveAllButtonText}>Approve all</Text>
+      </Pressable>
       <LeaveSummary pending={pending} approved={approved} rejected={rejected} />
       <FlatList
         data={requests}
@@ -113,6 +153,20 @@ const styles = StyleSheet.create({
     backgroundColor: '#cccccc',
   },
   undoButtonText: {
+    color: '#ffffff',
+    fontWeight: '600',
+  },
+  approveAllButton: {
+    backgroundColor: '#1a7f37',
+    borderRadius: 6,
+    paddingVertical: 12,
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  approveAllButtonDisabled: {
+    backgroundColor: '#cccccc',
+  },
+  approveAllButtonText: {
     color: '#ffffff',
     fontWeight: '600',
   },
